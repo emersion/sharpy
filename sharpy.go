@@ -20,11 +20,22 @@ type sanitizeFunc func(*irc.Message) error
 
 var sanitize = map[string]sanitizeFunc{
 	irc.NICK: sanitizeFirstArg(sanitizeNick),
-	irc.MODE: sanitizeFirstArg(sanitizeNick),
-	irc.SERVICE: sanitizeFirstArg(sanitizeNick),
-	irc.INVITE: sanitizeFirstArg(sanitizeNick),
+	//irc.MODE: sanitizeFirstArg(sanitizeNick),
+	//irc.SERVICE: sanitizeFirstArg(sanitizeNick),
+	//irc.INVITE: sanitizeFirstArg(sanitizeNick),
 	irc.PRIVMSG: sanitizeMessage,
 	irc.NOTICE: sanitizeMessage,
+	irc.RPL_NAMREPLY: func(msg *irc.Message) error {
+		if len(msg.Params) < 4 {
+			return errNotEnoughParams
+		}
+		nicks := strings.Fields(msg.Params[3])
+		for i, nick := range nicks {
+			nicks[i] = sanitizeNick(nick)
+		}
+		msg.Params[3] = strings.Join(nicks, " ")
+		return nil
+	},
 }
 
 func sanitizeFirstArg(sanitize func(string) string) sanitizeFunc {
@@ -57,8 +68,10 @@ func sanitizeNick(nick string) string {
 		switch r {
 		// %x5B-60 / %x7B-7D
 		// ; "[", "]", "\", "`", "_", "^", "{", "|", "}"
-	case '-', '[', ']', '\\', '`', '_', '^', '{', '|', '}':
+		case '-', '[', ']', '\\', '`', '_', '^', '{', '|', '}':
 			return r
+		case '@', '+':
+			return r // TODO: only in RPL_NAMREPLY
 		}
 		return '_'
 	}, nick)
@@ -71,6 +84,8 @@ func proxy(dec *irc.Decoder, enc *irc.Encoder) error {
 			return err
 		}
 
+		log.Println("[IN]", msg.Prefix, msg.Command, msg.Params)
+
 		if msg.Prefix != nil {
 			msg.Prefix.Name = sanitizeNick(msg.Prefix.Name)
 		}
@@ -80,6 +95,8 @@ func proxy(dec *irc.Decoder, enc *irc.Encoder) error {
 				return err
 			}
 		}
+
+		log.Println("[OUT]", msg.Prefix, msg.Command, msg.Params)
 
 		if err := enc.Encode(msg); err != nil {
 			return err
