@@ -72,7 +72,7 @@ func proxy(dec *irc.Decoder, enc *irc.Encoder) error {
 		}
 
 		if msg.Prefix != nil {
-			msg.Prefix.User = sanitizeNick(msg.Prefix.User)
+			msg.Prefix.Name = sanitizeNick(msg.Prefix.Name)
 		}
 
 		if f, ok := sanitize[msg.Command]; ok {
